@@ -78,8 +78,9 @@ def init(l):
 def process_chunk(split_file, index):
     split_dict = load_dict(split_file)
 
-    file_names = [f"cities/city_{index}.pkl",
-                  f"states/state_{index}.pkl", f"countries/country_{index}.pkl"]
+    file_names = [f"cities/city_{index}.pkl", f"states/state_{index}.pkl",
+                  f"countries/country_{index}.pkl"]
+    # f"diseases/disease_{index}.pkl", f"drugs/drug_{index}.pkl"
     file_paths = [f"{PKL_FOLDER}/bin/{name}" for name in file_names]
 
     with lock:
@@ -92,21 +93,61 @@ def process_chunk(split_file, index):
     gender_vecs = {}
     phase_vecs = {}
     reason_vecs = {}
+
+    # drug_vecs = {}
+    # diseases_vecs = {}
+    intervensions_vecs = {}
+
     city_vecs = {}
     state_vecs = {}
     country_vecs = {}
 
     for nctid, data in split_dict.items():
-        duration_vecs[nctid] = dur2vec(data[0][2])
+        duration_vecs[nctid] = dur2vec(data[2][2])
         min_age_vecs[nctid], max_age_vecs[nctid], age_span_vecs[nctid] = age2vec(
             data[1])
-        gender_vecs[nctid] = match2vec(data[3], f"{JSON_FOLDER}/gender.json")
-        phase_vecs[nctid] = match2vec(data[4], f"{JSON_FOLDER}/phase.json")
-        reason_vecs[nctid] = match2vec(data[2], f"{JSON_FOLDER}/reason.json")
-        city_vecs[nctid] = match2vec(data[10], f"{JSON_FOLDER}/cities.json")
-        state_vecs[nctid] = match2vec(data[9], f"{JSON_FOLDER}/states.json")
+        gender_vecs[nctid] = match2vec(data[9], f"{JSON_FOLDER}/gender.json")
+        phase_vecs[nctid] = match2vec(data[10], f"{JSON_FOLDER}/phase.json")
+        reason_vecs[nctid] = match2vec(data[8], f"{JSON_FOLDER}/reason.json")
+
+        intervensions_vecs[nctid] = match2vec(
+            data[4], f"{JSON_FOLDER}/intervention_types.json")
+        # drug_vecs[nctid] = match2vec(data[0], f"{JSON_FOLDER}/drugs.json")
+        # diseases_vecs[nctid] = match2vec(
+        #     data[7], f"{JSON_FOLDER}/diseases.json")
+
+        city_vecs[nctid] = match2vec(data[7], f"{JSON_FOLDER}/cities.json")
+        state_vecs[nctid] = match2vec(data[6], f"{JSON_FOLDER}/states.json")
         country_vecs[nctid] = match2vec(
-            data[8], f"{JSON_FOLDER}/countries.json")
+            data[5], f"{JSON_FOLDER}/countries.json")
+
+    # No lock needed
+    
+    # save_dict(drug_vecs, f"{PKL_FOLDER}/bin/drugs/drug_{index}.pkl", True)
+
+    # drug_vecs.clear()
+
+    # save_dict(diseases_vecs,
+    #             f"{PKL_FOLDER}/bin/diseases/disease_{index}.pkl", True)
+    
+    # diseases_vecs.clear()
+
+    ##### Disabled because it is too long, and we have drugbank data to connect
+    ##### TODO!!
+
+    save_dict(city_vecs, f"{PKL_FOLDER}/bin/cities/city_{index}.pkl", True)
+
+    city_vecs.clear()
+
+    save_dict(
+        state_vecs, f"{PKL_FOLDER}/bin/states/state_{index}.pkl", True)
+    
+    state_vecs.clear()
+
+    save_dict(country_vecs,
+                f"{PKL_FOLDER}/bin/countries/country_{index}.pkl", True)
+    
+    country_vecs.clear()
 
     with lock:
         save_dict(duration_vecs, f"{PKL_FOLDER}/bin/duration.pkl", True)
@@ -116,11 +157,17 @@ def process_chunk(split_file, index):
         save_dict(gender_vecs, f"{PKL_FOLDER}/bin/gender.pkl", True)
         save_dict(phase_vecs, f"{PKL_FOLDER}/bin/phase.pkl", True)
         save_dict(reason_vecs, f"{PKL_FOLDER}/bin/reason.pkl", True)
-        save_dict(city_vecs, f"{PKL_FOLDER}/bin/cities/city_{index}.pkl", True)
-        save_dict(
-            state_vecs, f"{PKL_FOLDER}/bin/states/state_{index}.pkl", True)
-        save_dict(country_vecs,
-                  f"{PKL_FOLDER}/bin/countries/country_{index}.pkl", True)
+        save_dict(intervensions_vecs,
+                  f"{PKL_FOLDER}/bin/intervention_type.pkl", True)
+        
+        duration_vecs.clear()
+        min_age_vecs.clear()
+        max_age_vecs.clear()
+        age_span_vecs.clear()
+        gender_vecs.clear()
+        phase_vecs.clear()
+        reason_vecs.clear()
+        intervensions_vecs.clear()
 
 
 def process_with(index_and_path):
@@ -129,14 +176,14 @@ def process_with(index_and_path):
     return process_chunk(path, index)
 
 
-def encode_features(batch_size=2**13, max_cpu=16):
+def encode_features(batch_size=2**11, max_cpu=12):
     splitPkl(f"{PKL_FOLDER}/full_features.pkl", split_size=batch_size)
     splited_file_names = load_pkls(f"{PKL_FOLDER}/temp")
     splited_paths = [
         f"{PKL_FOLDER}/temp/{name}" for name in splited_file_names]
 
-    file_names = ["gender.pkl", "duration.pkl", "min_age.pkl",
-                  "max_age.pkl", "age_span.pkl", "phase.pkl", "reason.pkl"]
+    file_names = ["gender.pkl", "duration.pkl", "min_age.pkl", "max_age.pkl", "age_span.pkl",
+                  "phase.pkl", "reason.pkl", "intervention_type.pkl"]
     file_paths = [f"{PKL_FOLDER}/bin/{name}" for name in file_names]
 
     reset_files(file_paths)
