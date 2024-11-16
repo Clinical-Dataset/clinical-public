@@ -103,23 +103,23 @@ def process_chunk(split_file, index):
     country_vecs = {}
 
     for nctid, data in split_dict.items():
-        duration_vecs[nctid] = dur2vec(data[2][2])
+        duration_vecs[nctid] = dur2vec(data[1][2])
         min_age_vecs[nctid], max_age_vecs[nctid], age_span_vecs[nctid] = age2vec(
-            data[1])
-        gender_vecs[nctid] = match2vec(data[9], f"{JSON_FOLDER}/gender.json")
-        phase_vecs[nctid] = match2vec(data[10], f"{JSON_FOLDER}/phase.json")
-        reason_vecs[nctid] = match2vec(data[8], f"{JSON_FOLDER}/reason.json")
+            data[0])
+        gender_vecs[nctid] = match2vec(data[8], f"{JSON_FOLDER}/gender.json")
+        phase_vecs[nctid] = match2vec(data[9], f"{JSON_FOLDER}/phase.json")
+        reason_vecs[nctid] = match2vec(data[7], f"{JSON_FOLDER}/reason.json")
 
         intervensions_vecs[nctid] = match2vec(
-            data[4], f"{JSON_FOLDER}/intervention_types.json")
+            data[3], f"{JSON_FOLDER}/intervention_types.json")
         # drug_vecs[nctid] = match2vec(data[0], f"{JSON_FOLDER}/drugs.json")
         # diseases_vecs[nctid] = match2vec(
         #     data[7], f"{JSON_FOLDER}/diseases.json")
 
-        city_vecs[nctid] = match2vec(data[7], f"{JSON_FOLDER}/cities.json")
-        state_vecs[nctid] = match2vec(data[6], f"{JSON_FOLDER}/states.json")
+        city_vecs[nctid] = match2vec(data[6], f"{JSON_FOLDER}/cities.json")
+        state_vecs[nctid] = match2vec(data[5], f"{JSON_FOLDER}/states.json")
         country_vecs[nctid] = match2vec(
-            data[5], f"{JSON_FOLDER}/countries.json")
+            data[4], f"{JSON_FOLDER}/countries.json")
 
     # No lock needed
     
