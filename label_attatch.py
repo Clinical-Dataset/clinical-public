@@ -4,7 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from config import LABEL_FILE, CSV_FOLDER, OUTPUT_FOLDER
-from preprocess.file_manage import load_csv
+from preprocess.file_manage import load_csv, save_csv
 
 
 def label_and_drop(file_name = "output.csv"):
@@ -28,7 +28,7 @@ def label_and_drop(file_name = "output.csv"):
     for i, row in tqdm(df.iterrows(), total=df.shape[0], desc="Labeling..."):
 
         nctid = row['nctid']
-        outcome = row['reason']
+        outcome = row['reason'][0]
 
         label = int(outcome2label.get(outcome, -1))
         label_dict[nctid] = label
@@ -43,7 +43,7 @@ def label_and_drop(file_name = "output.csv"):
     df = pd.DataFrame(filtered_rows).reset_index(drop=True)
 
     csv_path = os.path.join(OUTPUT_FOLDER, file_name)
-    df.to_csv(csv_path, index=False)
+    save_csv(csv_path, df)
 
     # edf = pd.DataFrame(errors).reset_index(drop=True)
 
