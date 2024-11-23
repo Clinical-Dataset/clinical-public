@@ -36,7 +36,8 @@ def xmlfile2loc(xml_file):
         if country:
             countries.append(country)
         if city:
-            cities.append(city)
+            # cities.append(city)
+            cities.append(re.sub(r'[^\w\s\-\(\).]', '', city).strip())
         if state:
             states.append(state)
 
@@ -84,12 +85,27 @@ def xmlfile2str(xml_file):
         ".//location/facility/name")]
 
     condition = root.findtext(".//condition", default='N/A')
-    intervention_name = root.findtext(
-        ".//intervention/intervention_name", default='N/A')
-    intervention_type = root.findtext(
-        ".//intervention/intervention_type", default='N/A')
 
-    intervention = [intervention_type, intervention_name]
+    intervention_types = root.findall(".//intervention/intervention_type")
+    intervention_names = root.findall(".//intervention/intervention_name")
+
+    intervention_types_list = [
+        type.text for type in intervention_types if type is not None]
+    intervention_names_list = [
+        name.text for name in intervention_names if name is not None]
+
+    intervention = {}
+
+    for type, name in zip(intervention_types_list, intervention_names_list):
+        name = re.sub(r'[^a-zA-Z0-9\s\-]', '', name).strip()
+        
+        if type in intervention:
+            intervention[type].append(name)
+        else:
+            intervention[type] = [name]
+
+    # if len(intervention.items()) == 0:
+    #     intervention = None
 
     return gender, phase, locations, condition, intervention
 
@@ -103,17 +119,20 @@ def xmlfile2str(xml_file):
 
 
 def csv2whystop(csv_file):
-    df = load_csv(csv_file)
+    df = load_csv(csv_file, sep= ',', tolist=False)
 
     reason_dict = {}
     reasons = []
-    
+
     for outcome in df['trialOutcome']:
         if "Terminated" in outcome:
-            reason = outcome.split(", ", 1)[1] if ", " in outcome else "No reason"
+            reason = outcome.split(
+                ", ", 1)[1] if ", " in outcome else "No reason"
             reasons.append(reason)
         elif "Completed" in outcome:
-            reasons.append("N/A")
+            reason = outcome.split(
+                ", ", 1)[1] if ", " in outcome else "Completed"
+            reasons.append(reason)
         else:
             reasons.append("")
     for id, reason in zip(df['studyid'], reasons):
@@ -146,6 +165,8 @@ def get_features(batch_size=2**13):
     date_dict = {}
     location_dict = {}
     whystop_dict = {}
+    intervention_dict = {}
+    drug_dict = {}
 
     gender_unique = set()
     phase_unique = set()
@@ -153,9 +174,12 @@ def get_features(batch_size=2**13):
     countries_unique = set()
     states_unique = set()
     cities_unique = set()
+    intervention_type_unique = set()
+    drug_unique = set()
+    diseases_unique = set()
 
     file_names = ['age_dict.pkl', 'location_dict.pkl',
-                  'date_dict.pkl', 'str_dict.pkl', 'stop_reason_dict.pkl']
+                  'date_dict.pkl', 'str_dict.pkl', 'stop_reason_dict.pkl', 'intervention_dict.pkl', 'drug_dict.pkl']
     file_paths = [f"{PKL_FOLDER}/{name}" for name in file_names]
 
     reset_files(file_paths)
@@ -174,7 +198,7 @@ def get_features(batch_size=2**13):
         start_date, completion_date = xmlfile2date(xml_path)
         gender, phase, locations, condition, intervention = xmlfile2str(
             xml_path)
-        whystop = reason_dict[nct_id] if nct_id in reason_dict.keys() else "N/A"
+        whystop = reason_dict[nct_id] if nct_id in reason_dict else "N/A"
 
         gender_unique.add(gender)
         phase_unique.add(phase)
@@ -182,13 +206,22 @@ def get_features(batch_size=2**13):
         countries_unique.update(countries)
         states_unique.update(states)
         cities_unique.update(cities)
+        intervention_type_unique.update(intervention.keys())
+        diseases_unique.add(condition)
+
+        intervention_dict[nct_id] = list(set(intervention.keys()))
+
+        if "Drug" in intervention.keys():
+            drug_dict[nct_id] = intervention["Drug"]
+            drug_unique.update(intervention["Drug"])
+        else:
+            drug_dict[nct_id] = ["N/A"]
 
         str_dict[nct_id] = {
-            "gender": gender,
-            "phase": phase,
+            "gender": [gender],
+            "phase": [phase],
             "locations": locations,
-            "condition": condition,
-            "intervention": intervention
+            "condition": [condition],
         }
 
         location_dict[nct_id] = {
@@ -199,7 +232,7 @@ def get_features(batch_size=2**13):
 
         duration = calculate_duration(
             start_date, completion_date) if start_date and completion_date else -1
-        date_dict[nct_id] = [start_date, completion_date, duration]
+        date_dict[nct_id] = [start_date, completion_date, int(duration)]
 
         min_age = parse_age(min_age)
         max_age = parse_age(max_age)
@@ -207,7 +240,7 @@ def get_features(batch_size=2**13):
                                            1 and max_age != -1) else -1
 
         age_dict[nct_id] = [min_age, max_age, age_span]
-        whystop_dict[nct_id] = whystop
+        whystop_dict[nct_id] = [whystop]
 
         if (i + 1) % batch_size == 0 or (i + 1) == len(xml_paths):
             save_dict(age_dict, f'{PKL_FOLDER}/age_dict.pkl', append=True)
@@ -216,15 +249,19 @@ def get_features(batch_size=2**13):
             save_dict(date_dict, f'{PKL_FOLDER}/date_dict.pkl', append=True)
             save_dict(str_dict, f'{PKL_FOLDER}/str_dict.pkl', append=True)
             save_dict(whystop_dict,
-                       f'{PKL_FOLDER}/stop_reason_dict.pkl', append=True)
+                      f'{PKL_FOLDER}/stop_reason_dict.pkl', append=True)
+            save_dict(intervention_dict, f'{PKL_FOLDER}/intervention_dict.pkl', append=True)
+            save_dict(drug_dict, f'{PKL_FOLDER}/drug_dict.pkl', append=True)
 
             age_dict.clear()
             str_dict.clear()
             date_dict.clear()
             location_dict.clear()
             whystop_dict.clear()
-            
-            # break
+            intervention_dict.clear()
+            drug_dict.clear()
+
+            break
             # for smaller test calc
 
     save_json(sorted(gender_unique), f'{JSON_FOLDER}/gender.json')
@@ -234,6 +271,9 @@ def get_features(batch_size=2**13):
     save_json(sorted(states_unique), f'{JSON_FOLDER}/states.json')
     save_json(sorted(cities_unique), f'{JSON_FOLDER}/cities.json')
     save_json(sorted(reason_unique), f'{JSON_FOLDER}/reason.json')
+    save_json(sorted(intervention_type_unique), f'{JSON_FOLDER}/intervention_types.json')
+    save_json(sorted(drug_unique), f'{JSON_FOLDER}/drugs.json')
+    save_json(sorted(diseases_unique), f'{JSON_FOLDER}/diseases.json')
 
     return None
 
