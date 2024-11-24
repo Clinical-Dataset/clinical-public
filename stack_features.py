@@ -1,4 +1,4 @@
-from preprocess.file_manage import load_dict, save_dict, load_pkls
+from preprocess.file_manage import load_dict, save_dict, load_pkls, save_csv
 from config import CSV_FOLDER, PKL_FOLDER, columns
 import os
 import pandas as pd
@@ -39,7 +39,7 @@ def stack_features():
     print(df)
 
     csv_path = os.path.join(CSV_FOLDER, "full_features.csv")
-    df.to_csv(csv_path, index=False)
+    save_csv(csv_path, df)
 
 
 if __name__ == "__main__":
