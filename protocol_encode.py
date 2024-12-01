@@ -1,14 +1,6 @@
-'''
-input:
-	data/raw_data.csv
+from preprocess.file_manage import load_dict, save_json, load_json
+from config import OUTPUT_FOLDER
 
-output:
-	data/sentence2embedding.pkl (preprocessing)
-	protocol_embedding 
-'''
-
-import csv, pickle, os 
-from functools import reduce
 from tqdm import tqdm 
 import torch 
 torch.manual_seed(0)
@@ -17,25 +9,34 @@ import torch.nn.functional as F
 
 import torch
 from transformers import AutoTokenizer, AutoModel
-import json
-import multiprocessing as mp
 import gc
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+import os
+os.environ["OMP_NUM_THREADS"] = "16"
+os.environ["MKL_NUM_THREADS"] = "16"
+torch.set_num_threads(16)
 
 def clean_protocol(protocol):
 	protocol = protocol.lower()
-	protocol_split = protocol.split('\n')
+	protocol_split = protocol.split('\r\n\r\n')
 	filter_out_empty_fn = lambda x: len(x.strip())>0
 	strip_fn = lambda x:x.strip()
 	protocol_split = list(filter(filter_out_empty_fn, protocol_split))	
 	protocol_split = list(map(strip_fn, protocol_split))
 	return protocol_split 
 
-def get_all_protocols():
-	input_file = 'data/raw_data.csv'
-	with open(input_file, 'r') as csvfile:
-		rows = list(csv.reader(csvfile, delimiter = ','))[1:]
-	protocols = [row[9] for row in rows]
+def get_all_protocols(target_file = "output.csv"):
+
+	target_file = f"{target_file.split('.')[0]}_criteria.pkl"
+	target_path = f"{OUTPUT_FOLDER}/{target_file}"
+
+	df = load_dict(target_path)
+
+	protocols = list(df.values())
+
 	return protocols
+    
 
 def split_protocol(protocol):
 	protocol_split = clean_protocol(protocol)
@@ -68,6 +69,9 @@ def collect_cleaned_sentence_set():
 			cleaned_sentence_lst.extend(result[1])
 	
 	cleaned_sentence_lst.extend('')
+ 
+	print(len(cleaned_sentence_lst), len(set(cleaned_sentence_lst)))
+	# breakpoint()  ### for testing
 
 	return set(cleaned_sentence_lst)
 
@@ -86,21 +90,18 @@ def get_sentence_embedding(sentence, tokenizer, model):
     
     return cls_embedding
 
-def save_sentence2idx(cleaned_sentence_set):
+def save_sentence2idx(cleaned_sentence_set, target_file="output.csv"):
 	print("save sentence2idx")
 	sentence2idx = {sentence: index for index, sentence in enumerate(cleaned_sentence_set)}
 
-	with open('data/sentence2id.json', 'w') as json_file:
-		json.dump(sentence2idx, json_file)
+	file_name = f"{target_file.split('.')[0]}_sentence2id.json"
+
+	save_json(sentence2idx, f"{OUTPUT_FOLDER}/{file_name}")
 
 
-def save_sentence2embedding(cleaned_sentence_set):
+def save_sentence2embedding(cleaned_sentence_set, target_file = "output.csv"):
 	print("save sentence2embedding")
 
-	# local_model_path = os.path.expanduser('~/research/tianfan_fu/trial-failure-reason-prediction/biobert-base-cased-v1.2')
-	# local_model_path = os.path.abspath(local_model_path)
-	# tokenizer = AutoTokenizer.from_pretrained(local_model_path)
-	# model = AutoModel.from_pretrained(local_model_path)
 	model_name = "dmis-lab/biobert-base-cased-v1.2"
 	tokenizer = AutoTokenizer.from_pretrained(model_name)
 	model = AutoModel.from_pretrained(model_name)
@@ -112,28 +113,36 @@ def save_sentence2embedding(cleaned_sentence_set):
 	
 	sentence_emb = torch.stack(sentence_emb, dim=0)
 
-	torch.save(sentence_emb, 'data/sentence_emb.pt')
+	file_name = f"{target_file.split('.')[0]}_sentence_emb.pt"
+
+	torch.save(sentence_emb, f'{OUTPUT_FOLDER}/{file_name}')
 
 
-def save_sentence_bert_dict_pkl():
+def save_sentence_bert_dict_pkl(target_file = "output.csv"):
 	print("collect cleaned sentence set")
-	cleaned_sentence_set = collect_cleaned_sentence_set() 
+	cleaned_sentence_set = collect_cleaned_sentence_set()
+
+
+	# for sentence in cleaned_sentence_set:  ### for testing
+	# 	print(sentence)
+	# 	breakpoint()
 	
-	save_sentence2idx(cleaned_sentence_set)
-	save_sentence2embedding(cleaned_sentence_set)
+	save_sentence2idx(cleaned_sentence_set, target_file=target_file)
+	save_sentence2embedding(cleaned_sentence_set, target_file=target_file)
 
 
-def load_sentence_2_vec(data_path="data"):
+def load_sentence_2_vec(data_path="output"):
 	# sentence_2_vec = pickle.load(open('data/sentence2embedding.pkl', 'rb'))
 
 	sentence_emb = torch.load(f"{data_path}/sentence_emb.pt")
-	data = json.load(open(f"{data_path}/sentence2id.json", "r"))
+	data = load_json(f"{data_path}/sentence2id.json")
 
 	sentence_2_vec = {sentence: sentence_emb[idx] for sentence, idx in data.items()}
 
 	return sentence_2_vec 
 
-def protocol2feature(protocol, sentence_2_vec):
+def protocol2feature(protocol, sentence_2_vec): # ->inclusion_sentence_embedding list, exclusion_sentence_embedding list
+    
 	result = split_protocol(protocol)
 	inclusion_criteria, exclusion_criteria = result[0], result[-1]
 	inclusion_feature = [sentence_2_vec[sentence].view(1,-1) for sentence in inclusion_criteria if sentence in sentence_2_vec]
@@ -190,4 +199,3 @@ if __name__ == "__main__":
 	# protocols = get_all_protocols()
 	# split_protocols(protocols)
 	save_sentence_bert_dict_pkl() 
-
