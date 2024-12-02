@@ -1,6 +1,6 @@
 
 from config import XML_FOLDER, OUTPUT_FOLDER
-from preprocess.file_manage import load_csv, reset_files, save_dict
+from preprocess.file_manage import load_csv, reset_files, save_dict, load_dict, save_csv
 from lxml import etree
 from tqdm import tqdm
 
@@ -53,6 +53,9 @@ def extract_criteria(target_file="output.csv", batch_size=2**12):
 
     criteria_dict = {}
 
+    target_path = f"{OUTPUT_FOLDER}/{target_file}"
+    original_df = load_csv(target_path)
+
     for i, path in tqdm(enumerate(xml_paths), desc="Saving criterias", total=len(xml_paths)):
         criteria = xml2criteria(path)
 
@@ -65,8 +68,23 @@ def extract_criteria(target_file="output.csv", batch_size=2**12):
 
             criteria_dict.clear()
 
+    tqdm.pandas(desc="Mapping criterias")
+    criteria_dict = load_dict(file_name)
+    original_df["criteria"] = original_df["nctid"].progress_apply(
+        lambda x: criteria_dict.get(x, None))
+
+    save_csv(target_path, original_df)
+
+    columns = ['age', 'date', 'drug', 'intervention', 'countries', 'states',
+               'cities', 'reason', 'gender', 'phase', 'locations', 'condition', 'label', 'criteria']
+
+    nctid_dict = original_df.set_index("nctid")[columns].apply(lambda row: row.values.tolist(), axis=1).to_dict()
+
+    pkl_name = f"{target_file.split('.')[0]}.pkl"
+    save_dict(nctid_dict, f"{OUTPUT_FOLDER}/{pkl_name}")
+
     return None
 
 
 if __name__ == "__main__":
-    extract_criteria("failure_reasoning.csv")
+    extract_criteria()

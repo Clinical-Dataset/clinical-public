@@ -168,15 +168,17 @@ def get_features(batch_size=2**13):
     intervention_dict = {}
     drug_dict = {}
 
-    gender_unique = set()
-    phase_unique = set()
-    locations_unique = set()
-    countries_unique = set()
-    states_unique = set()
-    cities_unique = set()
-    intervention_type_unique = set()
-    drug_unique = set()
-    diseases_unique = set()
+    # JSON saving moved to project_specific.create_json.py
+
+    # gender_unique = set()
+    # phase_unique = set()
+    # locations_unique = set()
+    # countries_unique = set()
+    # states_unique = set()
+    # cities_unique = set()
+    # intervention_type_unique = set()
+    # drug_unique = set()
+    # diseases_unique = set()
 
     file_names = ['age_dict.pkl', 'location_dict.pkl',
                   'date_dict.pkl', 'str_dict.pkl', 'stop_reason_dict.pkl', 'intervention_dict.pkl', 'drug_dict.pkl']
@@ -188,7 +190,7 @@ def get_features(batch_size=2**13):
         xml_paths = [line.strip() for line in file]
 
     reason_dict = csv2whystop(f"{CSV_FOLDER}/IQVIA_trial_outcomes.csv")
-    reason_unique = set(reason_dict.values())
+    # reason_unique = set(reason_dict.values())
 
     for i, xml_path in tqdm(enumerate(xml_paths), total=len(xml_paths)):
         nct_id = re.search(r"/([^/]+)\.xml$", xml_path).group(1)
@@ -200,20 +202,20 @@ def get_features(batch_size=2**13):
             xml_path)
         whystop = reason_dict[nct_id] if nct_id in reason_dict else "N/A"
 
-        gender_unique.add(gender)
-        phase_unique.add(phase)
-        locations_unique.update(locations)
-        countries_unique.update(countries)
-        states_unique.update(states)
-        cities_unique.update(cities)
-        intervention_type_unique.update(intervention.keys())
-        diseases_unique.add(condition)
+        # gender_unique.add(gender)
+        # phase_unique.add(phase)
+        # locations_unique.update(locations)
+        # countries_unique.update(countries)
+        # states_unique.update(states)
+        # cities_unique.update(cities)
+        # intervention_type_unique.update(intervention.keys())
+        # diseases_unique.add(condition)
 
         intervention_dict[nct_id] = list(set(intervention.keys()))
 
         if "Drug" in intervention.keys():
             drug_dict[nct_id] = intervention["Drug"]
-            drug_unique.update(intervention["Drug"])
+            # drug_unique.update(intervention["Drug"])
         else:
             drug_dict[nct_id] = ["N/A"]
 
@@ -261,19 +263,19 @@ def get_features(batch_size=2**13):
             intervention_dict.clear()
             drug_dict.clear()
 
-            break
+            # break
             # for smaller test calc
 
-    save_json(sorted(gender_unique), f'{JSON_FOLDER}/gender.json')
-    save_json(sorted(phase_unique), f'{JSON_FOLDER}/phase.json')
-    save_json(sorted(locations_unique), f'{JSON_FOLDER}/locations.json')
-    save_json(sorted(countries_unique), f'{JSON_FOLDER}/countries.json')
-    save_json(sorted(states_unique), f'{JSON_FOLDER}/states.json')
-    save_json(sorted(cities_unique), f'{JSON_FOLDER}/cities.json')
-    save_json(sorted(reason_unique), f'{JSON_FOLDER}/reason.json')
-    save_json(sorted(intervention_type_unique), f'{JSON_FOLDER}/intervention_types.json')
-    save_json(sorted(drug_unique), f'{JSON_FOLDER}/drugs.json')
-    save_json(sorted(diseases_unique), f'{JSON_FOLDER}/diseases.json')
+    # save_json(sorted(gender_unique), f'{JSON_FOLDER}/gender.json')
+    # save_json(sorted(phase_unique), f'{JSON_FOLDER}/phase.json')
+    # save_json(sorted(locations_unique), f'{JSON_FOLDER}/locations.json')
+    # save_json(sorted(countries_unique), f'{JSON_FOLDER}/countries.json')
+    # save_json(sorted(states_unique), f'{JSON_FOLDER}/states.json')
+    # save_json(sorted(cities_unique), f'{JSON_FOLDER}/cities.json')
+    # save_json(sorted(reason_unique), f'{JSON_FOLDER}/reason.json')
+    # save_json(sorted(intervention_type_unique), f'{JSON_FOLDER}/intervention_types.json')
+    # save_json(sorted(drug_unique), f'{JSON_FOLDER}/drugs.json')
+    # save_json(sorted(diseases_unique), f'{JSON_FOLDER}/diseases.json')
 
     return None
 

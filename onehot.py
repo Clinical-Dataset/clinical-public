@@ -1,6 +1,7 @@
-from preprocess.file_manage import save_dict, load_dict, load_json, reset_files, printPkl, splitPkl, clearPklTemp, load_pkls
+from preprocess.file_manage import save_dict, load_dict, save_json, load_json, reset_files, load_csv, splitPkl, clearPklTemp, load_pkls
 from config import OUTPUT_FOLDER, JSON_FOLDER, PKL_FOLDER
 from multiprocessing import Pool, Lock, Manager
+from encode.util import calc_stdv
 from tqdm import tqdm
 import time
 
@@ -9,6 +10,21 @@ import torch
 os.environ["OMP_NUM_THREADS"] = "16"
 os.environ["MKL_NUM_THREADS"] = "16"
 torch.set_num_threads(16)
+
+
+def intlist2vec(mean, std, val):
+    z = (val-mean) / std if std != 0 else 0
+
+    return (
+        [1, 0, 0, 0, 0, 0, 0] if val == -1 else
+        [0, 1, 0, 0, 0, 0, 0] if z < -2 else
+        [0, 0, 1, 0, 0, 0, 0] if z < -1 else
+        [0, 0, 0, 1, 0, 0, 0] if z < 0 else
+        [0, 0, 0, 0, 1, 0, 0] if z < 1 else
+        [0, 0, 0, 0, 0, 1, 0] if z < 2 else
+        [0, 0, 0, 0, 0, 0, 1] if 2 <= z else
+        [0, 0, 0, 0, 0, 0, 0]
+    )
 
 
 def dur2vec(duration):
@@ -102,21 +118,34 @@ def process_chunk(split_file, index):
     state_vecs = {}
     country_vecs = {}
 
+    sta_liat = load_json(f"{OUTPUT_FOLDER}/start_ages.json")
+    eda_list = load_json(f"{OUTPUT_FOLDER}/end_ages.json")
+    span_list = load_json(f"{OUTPUT_FOLDER}/spans.json")
+    dur_list = load_json(f"{OUTPUT_FOLDER}/durations.json")
+
+    sta_stats = calc_stdv(sta_liat)
+    eda_stats = calc_stdv(eda_list)
+    span_stats = calc_stdv(span_list)
+    dur_stats = calc_stdv(dur_list)
+
     for nctid, data in split_dict.items():
-        if not isinstance(data[1][2], int):
-            print(nctid, data[1], data[1][2])
-        duration_vecs[nctid] = dur2vec(int(data[1][2]))
-        min_age_vecs[nctid], max_age_vecs[nctid], age_span_vecs[nctid] = age2vec(
-            data[0])
+        # duration_vecs[nctid] = dur2vec(int(data[1][2]))
+        # min_age_vecs[nctid], max_age_vecs[nctid], age_span_vecs[nctid] = age2vec(
+        #     data[0])
+        duration_vecs[nctid] = intlist2vec(dur_stats[0], dur_stats[1], data[1][2])
+        min_age_vecs[nctid] = intlist2vec(sta_stats[0], sta_stats[1], data[0][0])
+        max_age_vecs[nctid] = intlist2vec(eda_stats[0], eda_stats[1], data[0][1])
+        age_span_vecs[nctid] = intlist2vec(span_stats[0], span_stats[1], data[0][2])
+
         gender_vecs[nctid] = match2vec(data[8], f"{JSON_FOLDER}/gender.json")
         phase_vecs[nctid] = match2vec(data[9], f"{JSON_FOLDER}/phase.json")
         reason_vecs[nctid] = match2vec(data[7], f"{JSON_FOLDER}/reason.json")
 
         intervensions_vecs[nctid] = match2vec(
-            data[3], f"{JSON_FOLDER}/intervention_types.json")
+            data[3], f"{JSON_FOLDER}/intervention.json")
         # drug_vecs[nctid] = match2vec(data[0], f"{JSON_FOLDER}/drugs.json")
         # diseases_vecs[nctid] = match2vec(
-        #     data[7], f"{JSON_FOLDER}/diseases.json")
+        #     data[7], f"{JSON_FOLDER}/condition.json")
 
         city_vecs[nctid] = match2vec(data[6], f"{JSON_FOLDER}/cities.json")
         state_vecs[nctid] = match2vec(data[5], f"{JSON_FOLDER}/states.json")
@@ -124,18 +153,18 @@ def process_chunk(split_file, index):
             data[4], f"{JSON_FOLDER}/countries.json")
 
     # No lock needed
-    
+
     # save_dict(drug_vecs, f"{OUTPUT_FOLDER}/bin/drugs/drug_{index}.pkl", True)
 
     # drug_vecs.clear()
 
     # save_dict(diseases_vecs,
-    #             f"{OUTPUT_FOLDER}/bin/diseases/disease_{index}.pkl", True)
-    
+    #             f"{OUTPUT_FOLDER}/bin/diseases/condition_{index}.pkl", True)
+
     # diseases_vecs.clear()
 
-    ##### Disabled because it is too long, and we have drugbank data to connect
-    ##### TODO!!
+    # Disabled because it is too long, and we have drugbank data to connect
+    # TODO!!
 
     save_dict(city_vecs, f"{OUTPUT_FOLDER}/bin/cities/city_{index}.pkl", True)
 
@@ -143,12 +172,12 @@ def process_chunk(split_file, index):
 
     save_dict(
         state_vecs, f"{OUTPUT_FOLDER}/bin/states/state_{index}.pkl", True)
-    
+
     state_vecs.clear()
 
     save_dict(country_vecs,
-                f"{OUTPUT_FOLDER}/bin/countries/country_{index}.pkl", True)
-    
+              f"{OUTPUT_FOLDER}/bin/countries/country_{index}.pkl", True)
+
     country_vecs.clear()
 
     with lock:
@@ -161,7 +190,7 @@ def process_chunk(split_file, index):
         save_dict(reason_vecs, f"{OUTPUT_FOLDER}/bin/reason.pkl", True)
         save_dict(intervensions_vecs,
                   f"{OUTPUT_FOLDER}/bin/intervention_type.pkl", True)
-        
+
         duration_vecs.clear()
         min_age_vecs.clear()
         max_age_vecs.clear()
@@ -178,8 +207,21 @@ def process_with(index_and_path):
     return process_chunk(path, index)
 
 
-def encode_features(target_name="output.pkl", batch_size=2**11, max_cpu=12):
-    splitPkl(f"{OUTPUT_FOLDER}/{target_name}", split_size=batch_size)
+def encode_features(target_name="output.csv", batch_size=2**11, max_cpu=12):
+
+    df = load_csv(f"{OUTPUT_FOLDER}/{target_name}")
+    start_age_list = [age[0] for age in df["age"]  if age[0] != -1]
+    end_age_list = [age[1] for age in df["age"]  if age[1] != -1]
+    span_list = [age[2] for age in df["age"] if age[2] != -1]
+    duration_list = [date[2] for date in df["date"] if date[2] != -1]
+
+    save_json(start_age_list, f"{OUTPUT_FOLDER}/start_ages.json")
+    save_json(end_age_list, f"{OUTPUT_FOLDER}/end_ages.json")
+    save_json(span_list, f"{OUTPUT_FOLDER}/spans.json")
+    save_json(duration_list, f"{OUTPUT_FOLDER}/durations.json")
+
+    splitPkl(
+        f"{OUTPUT_FOLDER}/{target_name.split('.')[0]}.pkl", split_size=batch_size)
     splited_file_names = load_pkls(f"{PKL_FOLDER}/temp")
     splited_paths = [
         f"{PKL_FOLDER}/temp/{name}" for name in splited_file_names]
@@ -199,6 +241,10 @@ def encode_features(target_name="output.pkl", batch_size=2**11, max_cpu=12):
         list(tqdm(pool.imap(process_with, indexed_paths), total=len(indexed_paths)))
 
     clearPklTemp()
+    os.remove(f"{OUTPUT_FOLDER}/start_ages.json")
+    os.remove(f"{OUTPUT_FOLDER}/end_ages.json")
+    os.remove(f"{OUTPUT_FOLDER}/spans.json")
+    os.remove(f"{OUTPUT_FOLDER}/durations.json")
 
 
 if __name__ == "__main__":
