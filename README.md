@@ -41,4 +41,5 @@
 
 - ```python -m process -e <output_name.csv>```
   - It will create one-hot encoded files under output/bin folder.
+  - Then it creates sentence embedding files from the criteria.
   - Takes time to produce.

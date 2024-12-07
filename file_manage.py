@@ -1,6 +1,7 @@
 import os
 import pickle
 import json
+import ast
 import pandas as pd
 from config import PKL_FOLDER
 
@@ -18,7 +19,7 @@ def reset_files(paths):
 def load_pkls(file_dir):
     names = [name for name in os.listdir(file_dir) if name.endswith(
         '.pkl') and not name.startswith('full')]
-    return names
+    return sorted(names)
 
 
 def save_dict(data, file_path, append=False):
@@ -48,9 +49,20 @@ def load_json(file_path):
         return json.load(f)
 
 
-def load_csv(file_path):
-    return pd.read_csv(file_path)
+def load_csv(file_path, sep='|', tolist=True):
+    df = pd.read_csv(file_path, sep=sep)
 
+    if not tolist:
+        return df
+
+    for col in df.columns:
+        if col not in ['nctid', 'label', 'criteria']:
+            df[col] = df[col].apply(lambda x: ast.literal_eval(x))
+
+    return df
+
+def save_csv(file_path, df):
+    df.to_csv(file_path, index=False, sep='|')
 
 def printPkl(file):
     f = load_dict(file)
@@ -60,10 +72,8 @@ def printPkl(file):
     print(df)
 
 
-def splitPkl(file_path, split_size=2**15):
+def splitPkl(file_path, temp_folder=f"{PKL_FOLDER}/temp", split_size=2**15):
     full_dict = load_dict(file_path)
-
-    temp_folder = f"{PKL_FOLDER}/temp"
 
     if not os.path.exists(temp_folder):
         os.makedirs(temp_folder)
@@ -76,8 +86,7 @@ def splitPkl(file_path, split_size=2**15):
         save_dict(chunk_dict, chunk_file)
 
 
-def clearPklTemp():
-    temp_path = f"{PKL_FOLDER}/temp"
+def clearPklTemp(temp_path=f"{PKL_FOLDER}/temp"):
     names = load_pkls(temp_path)
 
     for file_name in names:
